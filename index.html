@@ -148,26 +148,23 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc, arrayUnion, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        /** * গুরুত্বপূর্ণ নির্দেশিকা:
-         * ভেরসেল বা গিটহাবে হোস্ট করলে 'firebaseConfig' এ আপনার নিজের ফায়ারবেস কনফিগারেশন বসাতে হবে।
+        /** * Firebase Configuration Setup
          */
         let firebaseConfig;
-        try {
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                firebaseConfig = JSON.parse(__firebase_config);
-            } else {
-                // এখানে আপনার নিজের Firebase Config বসান (Firebase Console থেকে পাবেন)
-                firebaseConfig = {
-                    apiKey: "YOUR_API_KEY",
-                    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-                    projectId: "YOUR_PROJECT_ID",
-                    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-                    messagingSenderId: "YOUR_SENDER_ID",
-                    appId: "YOUR_APP_ID"
-                };
-            }
-        } catch (e) {
-            console.error("Config Error:", e);
+        const isCanvas = typeof __firebase_config !== 'undefined';
+
+        if (isCanvas) {
+            firebaseConfig = JSON.parse(__firebase_config);
+        } else {
+            // ভেরসেল/গিটহাবে হোস্ট করার সময় নিচের ডাটাগুলো আপনার Firebase Console থেকে পরিবর্তন করুন
+            firebaseConfig = {
+                apiKey: "YOUR_API_KEY",
+                authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+                projectId: "YOUR_PROJECT_ID",
+                storageBucket: "YOUR_PROJECT_ID.appspot.com",
+                messagingSenderId: "YOUR_SENDER_ID",
+                appId: "YOUR_APP_ID"
+            };
         }
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'tel-dicche-manikganj-v1';
@@ -180,12 +177,13 @@
         const pumpModal = document.getElementById('pumpModal');
         const reviewModal = document.getElementById('reviewModal');
 
-        // Initial App Setup
+        // Firebase Instances
         let app, auth, db, currentUser;
 
         const startApp = async () => {
-            if (!firebaseConfig || firebaseConfig.apiKey === "YOUR_API_KEY") {
-                loadingText.innerHTML = `<span class="text-red-500 font-bold">Error: Firebase Config Missing!</span><br><small class="text-gray-400">কোডটির firebaseConfig অংশে আপনার নিজস্ব API Key এবং অন্যান্য তথ্য বসান।</small>`;
+            // API Key চেক করা (শুধুমাত্র ভেরসেল-এ কাজের জন্য)
+            if (!isCanvas && (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY")) {
+                loadingText.innerHTML = `<span class="text-red-500 font-bold">Firebase Config Missing!</span><br><small class="text-gray-400">কোড এডিটরে গিয়ে আপনার নিজস্ব ফায়ারবেস কনফিগ বসান।</small>`;
                 return;
             }
 
@@ -194,7 +192,7 @@
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                // Rule 3: Auth Before Queries
+                // Authentication (Rule 3)
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
@@ -208,15 +206,15 @@
                     }
                 });
             } catch (error) {
-                console.error("Init error:", error);
-                loadingText.innerText = "সার্ভারের সাথে সংযোগ করা যাচ্ছে না।";
+                console.error("Initialization error:", error);
+                loadingText.innerText = "ফায়ারবেস কানেকশন এরর। কনফিগ ডাটা চেক করুন।";
             }
         };
 
         const fetchPumps = () => {
             if (!currentUser) return;
             
-            // Rule 1: Strict Paths
+            // Strict Path (Rule 1)
             const pumpCollection = collection(db, 'artifacts', appId, 'public', 'data', 'pumps');
             
             onSnapshot(pumpCollection, (snapshot) => {
@@ -237,13 +235,15 @@
             }, (error) => {
                 console.error("Firestore Error:", error);
                 loadingEl.classList.add('hidden');
-                alert("তথ্য লোড করতে সমস্যা হয়েছে। দয়া করে ফায়ারবেস পারমিশন চেক করুন।");
+                if (error.code === 'permission-denied') {
+                    loadingText.innerHTML = `<span class="text-red-500">পারমিশন এরর! ফায়ারবেস রুলস আপডেট করুন।</span>`;
+                }
             });
         };
 
         function renderPumps(pumps) {
             pumpListEl.innerHTML = '';
-            // Sort by time (latest first)
+            // Sort by time in memory (Rule 2)
             pumps.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
 
             pumps.forEach(pump => {
@@ -281,24 +281,24 @@
                             </div>
                             <div class="text-right">
                                 <span class="bg-orange-100 text-orange-800 text-[10px] px-2 py-1 rounded-full font-bold">
-                                    ${new Date(pump.updatedAt?.seconds * 1000).toLocaleTimeString('bn-BD')}
+                                    ${pump.updatedAt ? new Date(pump.updatedAt.seconds * 1000).toLocaleTimeString('bn-BD') : 'Loading...'}
                                 </span>
                             </div>
                         </div>
 
                         <div class="grid grid-cols-3 gap-2 mb-4 bg-gray-50 p-3 rounded-lg border">
                             <div class="text-center border-r border-gray-200">
-                                <p class="text-[10px] text-gray-400 font-bold">অকটেন</p>
+                                <p class="text-[10px] text-gray-400 font-bold uppercase">অকটেন</p>
                                 <p class="${getStatusClass(pump.octaneStatus)} text-sm">${getStatusText(pump.octaneStatus)}</p>
                                 <p class="text-[10px] text-gray-500">${pump.octaneLimit || '-'}</p>
                             </div>
                             <div class="text-center border-r border-gray-200">
-                                <p class="text-[10px] text-gray-400 font-bold">পেট্রোল</p>
+                                <p class="text-[10px] text-gray-400 font-bold uppercase">পেট্রোল</p>
                                 <p class="${getStatusClass(pump.petrolStatus)} text-sm">${getStatusText(pump.petrolStatus)}</p>
                                 <p class="text-[10px] text-gray-500">${pump.petrolLimit || '-'}</p>
                             </div>
                             <div class="text-center">
-                                <p class="text-[10px] text-gray-400 font-bold">ডিজেল</p>
+                                <p class="text-[10px] text-gray-400 font-bold uppercase">ডিজেল</p>
                                 <p class="${getStatusClass(pump.dieselStatus)} text-sm">${getStatusText(pump.dieselStatus)}</p>
                                 <p class="text-[10px] text-gray-500">${pump.dieselLimit || '-'}</p>
                             </div>
@@ -310,11 +310,11 @@
 
                         <div class="border-t pt-4">
                             <div class="flex justify-between items-center mb-2">
-                                <h4 class="text-sm font-bold text-gray-600">রিভিউ (${(pump.reviews || []).length}):</h4>
-                                <button onclick="window.openReviewModal('${pump.id}')" class="text-xs text-orange-600 font-bold hover:underline">রিভিউ দিন</button>
+                                <h4 class="text-sm font-bold text-gray-600">সাম্প্রতিক রিভিউ (${(pump.reviews || []).length}):</h4>
+                                <button onclick="window.openReviewModal('${pump.id}')" class="text-xs text-orange-600 font-bold hover:underline">মতামত দিন</button>
                             </div>
                             <div class="space-y-1">
-                                ${reviewsHtml || '<p class="text-xs text-gray-400 italic">কোন রিভিউ নেই</p>'}
+                                ${reviewsHtml || '<p class="text-xs text-gray-400 italic">এখনো কোন রিভিউ নেই</p>'}
                             </div>
                         </div>
                     </div>
@@ -323,7 +323,7 @@
             });
         }
 
-        // Form logic
+        // Form Submission logic
         document.getElementById('pumpForm').onsubmit = async (e) => {
             e.preventDefault();
             if (!currentUser) return;
@@ -352,7 +352,7 @@
                 closeModal();
             } catch (err) {
                 console.error(err);
-                alert("ভুল হয়েছে! ফায়ারবেস রুলস চেক করুন।");
+                alert("তথ্য জমা দিতে সমস্যা হয়েছে। ফায়ারবেস কনফিগারেশন চেক করুন।");
             } finally {
                 btn.disabled = false;
                 btn.innerText = "তথ্য জমা দিন";
@@ -379,11 +379,11 @@
                 e.target.reset();
                 closeReviewModal();
             } catch (err) {
-                alert("রিভিউ যোগ করা যায়নি।");
+                alert("রিভিউ যোগ করা সম্ভব হয়নি।");
             }
         };
 
-        // Window Globals
+        // Modal Utilities
         window.openReviewModal = (id) => {
             document.getElementById('reviewPumpId').value = id;
             reviewModal.classList.remove('hidden');
@@ -392,7 +392,7 @@
         document.getElementById('addPumpBtn').onclick = () => pumpModal.classList.remove('hidden');
         window.closeModal = () => pumpModal.classList.add('hidden');
 
-        // Start
+        // Initial Start
         startApp();
     </script>
 </body>
