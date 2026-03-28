@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>তেল দিচ্ছে - মানিকগঞ্জ পাম্প আপডেট</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js" type="module"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js" type="module"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js" type="module"></script>
+    <style>
+        body {
+            font-family: 'Hind Siliguri', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .pump-card {
+            transition: transform 0.2s;
+        }
+        .pump-card:hover {
+            transform: translateY(-4px);
+        }
+        .status-available { color: #059669; font-weight: bold; }
+        .status-unavailable { color: #dc2626; font-weight: bold; }
+        
+        /* Custom scrollbar for better UX in mobile forms */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ea580c;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen pb-12">
+
+    <!-- Header -->
+    <header class="bg-orange-600 text-white p-6 shadow-lg sticky top-0 z-50">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <h1 class="text-3xl font-bold">তেল দিচ্ছে ⛽</h1>
+            <button id="addPumpBtn" class="bg-white text-orange-600 px-4 py-2 rounded-lg font-bold hover:bg-orange-100 transition shadow-md">পাম্প যোগ করুন</button>
+        </div>
+        <p class="max-w-4xl mx-auto mt-2 text-sm opacity-90">মানিকগঞ্জের পাম্পগুলোর তেলের সর্বশেষ আপডেট জানুন</p>
+    </header>
+
+    <main class="max-w-4xl mx-auto mt-8 px-4">
+        
+        <!-- Loading State -->
+        <div id="loading" class="text-center py-20">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
+            <p class="mt-4 text-gray-600">তথ্য লোড হচ্ছে...</p>
+        </div>
+
+        <!-- Pump List -->
+        <div id="pumpList" class="grid gap-6 hidden">
+            <!-- Dynamic Content Here -->
+        </div>
+
+        <!-- No Data Message -->
+        <div id="noData" class="hidden text-center py-20 bg-white rounded-xl shadow-sm border border-dashed border-gray-300">
+            <p class="text-gray-500">এখনো কোন পাম্পের তথ্য যোগ করা হয়নি।</p>
+        </div>
+    </main>
+
+    <!-- Modal for Adding Pump -->
+    <div id="pumpModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-[100] p-4">
+        <div class="bg-white rounded-xl w-full max-w-lg overflow-hidden shadow-2xl">
+            <div class="bg-orange-600 p-4 text-white flex justify-between">
+                <h2 class="text-xl font-bold">পাম্পের তথ্য দিন</h2>
+                <button onclick="closeModal()" class="text-2xl hover:text-gray-200">&times;</button>
+            </div>
+            <form id="pumpForm" class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">আপনার নাম *</label>
+                    <input type="text" id="userName" required class="w-full mt-1 border rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="আপনার পুরো নাম লিখুন">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">পাম্পের নাম *</label>
+                    <input type="text" id="pumpName" required class="w-full mt-1 border rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="যেমন: বিশ্বাস পাম্প">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">পাম্পের অবস্থান (মানিকগঞ্জ)</label>
+                    <input type="text" id="pumpLocation" required class="w-full mt-1 border rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="যেমন: বাসস্ট্যান্ড এলাকা">
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4">
+                    <div class="space-y-2">
+                        <label class="font-bold text-orange-700">অকটেন</label>
+                        <select id="octaneStatus" class="w-full border rounded p-2 focus:ring-2 focus:ring-orange-500 outline-none">
+                            <option value="available">পাওয়া যাচ্ছে</option>
+                            <option value="limited">সীমিত</option>
+                            <option value="out">শেষ</option>
+                        </select>
+                        <input type="text" id="octaneLimit" class="w-full border rounded p-2 text-xs" placeholder="লিমিট (যেমন: ২০০০৳)">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="font-bold text-blue-700">পেট্রোল</label>
+                        <select id="petrolStatus" class="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="available">পাওয়া যাচ্ছে</option>
+                            <option value="limited">সীমিত</option>
+                            <option value="out">শেষ</option>
+                        </select>
+                        <input type="text" id="petrolLimit" class="w-full border rounded p-2 text-xs" placeholder="লিমিট (যেমন: ১৫০০৳)">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="font-bold text-green-700">ডিজেল</label>
+                        <select id="dieselStatus" class="w-full border rounded p-2 focus:ring-2 focus:ring-green-500 outline-none">
+                            <option value="available">পাওয়া যাচ্ছে</option>
+                            <option value="limited">সীমিত</option>
+                            <option value="out">শেষ</option>
+                        </select>
+                        <input type="text" id="dieselLimit" class="w-full border rounded p-2 text-xs" placeholder="লিমিট (যেমন: ৫০০০৳)">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">সময়সূচী (কখন থেকে কখন দিবে)</label>
+                    <input type="text" id="timing" required class="w-full mt-1 border rounded-lg p-2 outline-none" placeholder="যেমন: সকাল ৮টা - রাত ১০টা">
+                </div>
+
+                <div class="pt-4">
+                    <button type="submit" class="w-full bg-orange-600 text-white font-bold py-3 rounded-lg hover:bg-orange-700 transition shadow-lg">তথ্য জমা দিন</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Review Modal -->
+    <div id="reviewModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-[110] p-4">
+        <div class="bg-white rounded-xl w-full max-w-md shadow-2xl">
+            <div class="bg-gray-800 p-4 text-white flex justify-between">
+                <h2 class="text-xl font-bold">রিভিউ দিন</h2>
+                <button onclick="closeReviewModal()" class="text-2xl hover:text-gray-400">&times;</button>
+            </div>
+            <form id="reviewForm" class="p-6 space-y-4">
+                <input type="hidden" id="reviewPumpId">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">আপনার নাম *</label>
+                    <input type="text" id="reviewerName" required class="w-full mt-1 border rounded-lg p-2 outline-none focus:ring-2 focus:ring-gray-800" placeholder="আপনার নাম লিখুন">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">আপনার মন্তব্য *</label>
+                    <textarea id="reviewText" required class="w-full mt-1 border rounded-lg p-2 outline-none focus:ring-2 focus:ring-gray-800" rows="3" placeholder="পাম্পের বর্তমান অবস্থা সম্পর্কে লিখুন..."></textarea>
+                </div>
+                <button type="submit" class="w-full bg-gray-800 text-white font-bold py-3 rounded-lg hover:bg-gray-900 transition shadow-lg">রিভিউ জমা দিন</button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc, arrayUnion, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global environment variables
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'tel-dicche-manikganj';
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentUser = null;
+
+        // UI Elements
+        const pumpListEl = document.getElementById('pumpList');
+        const loadingEl = document.getElementById('loading');
+        const noDataEl = document.getElementById('noData');
+        const pumpModal = document.getElementById('pumpModal');
+        const reviewModal = document.getElementById('reviewModal');
+
+        /**
+         * Rule 3: Auth Before Queries
+         * We await auth completion BEFORE setting up listeners or operations.
+         */
+        const init = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication failed:", error);
+                loadingEl.innerHTML = `<p class="text-red-600 font-bold p-10">সার্ভারে সংযোগ করতে সমস্যা হচ্ছে। অনুগ্রহ করে পেজটি রিফ্রেশ করুন।</p>`;
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                currentUser = user;
+                if (user) {
+                    fetchPumps();
+                }
+            });
+        };
+
+        // Start initialization
+        init();
+
+        /**
+         * Fetch Data using strict path: Rule 1
+         */
+        function fetchPumps() {
+            if (!currentUser) return;
+            
+            const pumpCollection = collection(db, 'artifacts', appId, 'public', 'data', 'pumps');
+            
+            // onSnapshot with both success and error callbacks as required
+            onSnapshot(pumpCollection, (snapshot) => {
+                loadingEl.classList.add('hidden');
+                const pumps = [];
+                snapshot.forEach(doc => {
+                    pumps.push({ id: doc.id, ...doc.data() });
+                });
+
+                if (pumps.length === 0) {
+                    noDataEl.classList.remove('hidden');
+                    pumpListEl.classList.add('hidden');
+                } else {
+                    noDataEl.classList.add('hidden');
+                    pumpListEl.classList.remove('hidden');
+                    renderPumps(pumps);
+                }
+            }, (error) => {
+                console.error("Firestore Permission Error:", error);
+                if (error.code === 'permission-denied') {
+                    // Handle specifically for user display
+                }
+            });
+        }
+
+        function renderPumps(pumps) {
+            pumpListEl.innerHTML = '';
+            // Sorting in JS memory as per Rule 2 (no complex queries in Firestore)
+            pumps.sort((a, b) => {
+                const timeA = a.updatedAt?.seconds || 0;
+                const timeB = b.updatedAt?.seconds || 0;
+                return timeB - timeA;
+            });
+
+            pumps.forEach(pump => {
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-xl shadow-md border overflow-hidden pump-card';
+                
+                const getStatusClass = (status) => {
+                    if (status === 'available') return 'text-green-600 font-bold';
+                    if (status === 'limited') return 'text-yellow-600 font-bold';
+                    return 'text-red-600 font-bold';
+                };
+
+                const getStatusText = (status) => {
+                    if (status === 'available') return 'পাওয়া যাচ্ছে';
+                    if (status === 'limited') return 'সীমিত';
+                    return 'শেষ';
+                };
+
+                const reviewsHtml = (pump.reviews || []).slice(-3).reverse().map(rev => `
+                    <div class="bg-gray-50 p-2 rounded text-sm mb-1">
+                        <span class="font-bold text-gray-700">${rev.userName}:</span>
+                        <span class="text-gray-600">${rev.comment}</span>
+                    </div>
+                `).join('');
+
+                card.innerHTML = `
+                    <div class="p-5">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="max-w-[70%]">
+                                <h3 class="text-xl font-bold text-gray-800">${pump.pumpName}</h3>
+                                <p class="text-sm text-gray-500 flex items-center">
+                                    <svg class="w-4 h-4 mr-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path></svg>
+                                    ${pump.location}
+                                </p>
+                            </div>
+                            <div class="text-right">
+                                <span class="bg-orange-100 text-orange-800 text-[10px] px-2 py-1 rounded-full font-bold whitespace-nowrap">
+                                    আপডেট: ${new Date(pump.updatedAt?.seconds * 1000).toLocaleTimeString('bn-BD')}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2 mb-4 bg-gray-50 p-3 rounded-lg border">
+                            <div class="text-center border-r">
+                                <p class="text-[10px] text-gray-400 font-bold uppercase">অকটেন</p>
+                                <p class="${getStatusClass(pump.octaneStatus)} text-sm">${getStatusText(pump.octaneStatus)}</p>
+                                <p class="text-[10px] text-gray-500">${pump.octaneLimit || '-'}</p>
+                            </div>
+                            <div class="text-center border-r">
+                                <p class="text-[10px] text-gray-400 font-bold uppercase">পেট্রোল</p>
+                                <p class="${getStatusClass(pump.petrolStatus)} text-sm">${getStatusText(pump.petrolStatus)}</p>
+                                <p class="text-[10px] text-gray-500">${pump.petrolLimit || '-'}</p>
+                            </div>
+                            <div class="text-center">
+                                <p class="text-[10px] text-gray-400 font-bold uppercase">ডিজেল</p>
+                                <p class="${getStatusClass(pump.dieselStatus)} text-sm">${getStatusText(pump.dieselStatus)}</p>
+                                <p class="text-[10px] text-gray-500">${pump.dieselLimit || '-'}</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center text-sm text-gray-700 mb-4">
+                            <svg class="w-4 h-4 mr-2 text-orange-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            সময়সূচী: <span class="font-bold ml-1">${pump.timing}</span>
+                        </div>
+
+                        <div class="border-t pt-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <h4 class="text-sm font-bold text-gray-600">সাম্প্রতিক রিভিউ (${(pump.reviews || []).length}):</h4>
+                                <button onclick="window.openReviewModal('${pump.id}')" class="text-xs text-orange-600 font-bold border border-orange-200 px-2 py-1 rounded hover:bg-orange-50 transition">মতামত দিন</button>
+                            </div>
+                            <div class="space-y-1">
+                                ${reviewsHtml || '<p class="text-xs text-gray-400 italic">এখনো কোন রিভিউ নেই</p>'}
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 pt-4 border-t flex justify-between items-center">
+                            <div class="text-[10px] text-gray-400 italic">
+                                তথ্য দিয়েছেন: ${pump.addedBy}
+                            </div>
+                            <div class="text-[8px] text-gray-300">
+                                UID: ${pump.addedByUid || 'Public'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                pumpListEl.appendChild(card);
+            });
+        }
+
+        // Form Handlers
+        document.getElementById('pumpForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            const newPump = {
+                pumpName: document.getElementById('pumpName').value,
+                location: document.getElementById('pumpLocation').value,
+                addedBy: document.getElementById('userName').value,
+                addedByUid: currentUser.uid,
+                octaneStatus: document.getElementById('octaneStatus').value,
+                octaneLimit: document.getElementById('octaneLimit').value,
+                petrolStatus: document.getElementById('petrolStatus').value,
+                petrolLimit: document.getElementById('petrolLimit').value,
+                dieselStatus: document.getElementById('dieselStatus').value,
+                dieselLimit: document.getElementById('dieselLimit').value,
+                timing: document.getElementById('timing').value,
+                updatedAt: Timestamp.now(),
+                reviews: []
+            };
+
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'pumps'), newPump);
+                e.target.reset();
+                closeModal();
+            } catch (err) {
+                console.error("Add Doc Error:", err);
+                alert("তথ্য সেভ করতে সমস্যা হয়েছে। আপনার ইন্টারনেট কানেকশন চেক করুন।");
+            }
+        });
+
+        document.getElementById('reviewForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            const pumpId = document.getElementById('reviewPumpId').value;
+            const review = {
+                userName: document.getElementById('reviewerName').value,
+                reviewerUid: currentUser.uid,
+                comment: document.getElementById('reviewText').value,
+                date: Timestamp.now()
+            };
+
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'pumps', pumpId);
+                await updateDoc(docRef, {
+                    reviews: arrayUnion(review),
+                    updatedAt: Timestamp.now()
+                });
+                e.target.reset();
+                closeReviewModal();
+            } catch (err) {
+                console.error("Update Doc Error:", err);
+                alert("রিভিউ যোগ করা সম্ভব হয়নি।");
+            }
+        });
+
+        // Global functions for modal control (attached to window for HTML onclick attributes)
+        window.openReviewModal = (id) => {
+            document.getElementById('reviewPumpId').value = id;
+            reviewModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden'; // Prevent background scroll
+        };
+
+        window.closeReviewModal = () => {
+            reviewModal.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        };
+
+        document.getElementById('addPumpBtn').onclick = () => {
+            pumpModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        };
+        
+        window.closeModal = () => {
+            pumpModal.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        };
+
+        // Close modals on clicking outside
+        window.addEventListener('click', (e) => {
+            if (e.target === pumpModal) closeModal();
+            if (e.target === reviewModal) closeReviewModal();
+        });
+
+    </script>
+</body>
+</html>
