@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>তেল দিচ্ছে - মানিকগঞ্জ পাম্প আপডেট</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js" type="module"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js" type="module"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js" type="module"></script>
+    <style>
+        body {
+            font-family: 'Hind Siliguri', sans-serif;
+            background: radial-gradient(circle at top left, #fff7ed 0%, #fdf2f2 50%, #f0f9ff 100%);
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+        .pump-card {
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .pump-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 25px 50px -12px rgba(234, 88, 12, 0.15);
+        }
+        .live-pulse {
+            width: 8px;
+            height: 8px;
+            background: #ef4444;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .btn-premium {
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-premium:hover {
+            filter: brightness(1.1);
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body class="text-slate-900">
+
+    <!-- Premium Navbar -->
+    <nav class="sticky top-0 z-50 glass border-b border-orange-100 px-4 py-3">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="bg-orange-600 p-2.5 rounded-2xl shadow-lg shadow-orange-200">
+                    <!-- Updated Oil Pump Logo -->
+                    <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 22L4 22M20 22L21 22M7 22L7 7C7 5.89543 7.89543 5 9 5H15C16.1046 5 17 5.89543 17 7V22M7 11H17M11 15V15.01M13 15V15.01M11 18V18.01M13 18V18.01M21 13V15C21 16.1046 20.1046 17 19 17C17.8954 17 17 16.1046 17 15V11" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black text-slate-800 tracking-tight leading-none">তেল দিচ্ছে</h1>
+                    <span class="text-[10px] font-bold text-orange-600 uppercase tracking-widest">Manikganj Live</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="adminLoginBtn" class="text-[10px] font-bold text-slate-400 hover:text-orange-600 px-3 py-2 border border-transparent hover:border-orange-100 rounded-xl transition">ADMIN ACCESS</button>
+                <button id="addPumpBtn" class="btn-premium text-white px-5 py-2.5 rounded-2xl font-bold shadow-lg shadow-orange-200 text-sm">পাম্প যোগ করুন</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="max-w-6xl mx-auto mt-12 px-4 text-center">
+        <div class="inline-flex items-center gap-2 bg-white/60 border border-white px-4 py-1.5 rounded-full mb-6 shadow-sm">
+            <div class="live-pulse"></div>
+            <span class="text-xs font-bold text-slate-600 uppercase tracking-tighter">রিয়েল-টাইম আপডেট মানিকগঞ্জ</span>
+        </div>
+        <h2 class="text-4xl md:text-6xl font-black text-slate-800 mb-4 leading-tight">
+            নিকটস্থ পাম্পের তেলের <br><span class="text-orange-600">লাইভ আপডেট</span> জানুন
+        </h2>
+        <p class="max-w-xl mx-auto text-slate-500 text-sm md:text-base font-medium">মানিকগঞ্জের পাম্পগুলোতে তেলের প্রাপ্যতা এবং সময়সূচী এখন আপনার হাতের মুঠোয়।</p>
+    </section>
+
+    <!-- Content Area -->
+    <main class="max-w-6xl mx-auto mt-12 px-4 pb-32">
+        <div id="loading" class="flex flex-col items-center py-20">
+            <div class="w-12 h-12 border-4 border-orange-100 border-t-orange-600 rounded-full animate-spin"></div>
+            <p id="loadingText" class="mt-4 text-slate-400 font-bold animate-pulse">তথ্য যাচাই করা হচ্ছে...</p>
+        </div>
+
+        <div id="pumpList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 hidden"></div>
+
+        <div id="noData" class="hidden py-24 text-center glass rounded-[50px] border-dashed border-2 border-slate-200">
+            <div class="text-6xl mb-4">⛽</div>
+            <p class="text-slate-500 font-bold text-lg">এখনো কোন পাম্পের তথ্য দেওয়া হয়নি।</p>
+            <p class="text-slate-400 text-sm mt-1">তথ্য যোগ করে আপনার পাশের মানুষকে সাহায্য করুন।</p>
+        </div>
+    </main>
+
+    <!-- Footer Credit -->
+    <footer class="mt-20 border-t border-slate-100 bg-white/40 py-16 px-4">
+        <div class="max-w-6xl mx-auto flex flex-col items-center">
+            <div class="flex items-center gap-4 mb-6">
+                <span class="h-px w-12 bg-slate-200"></span>
+                <p class="text-slate-800 font-black text-lg tracking-widest">Developed By : <span class="text-orange-600">Aishorjo</span></p>
+                <span class="h-px w-12 bg-slate-200"></span>
+            </div>
+            <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">© ২০২৪ তেল দিচ্ছে - মানিকগঞ্জ কমিউনিটি ডিরেক্টরি</p>
+        </div>
+    </footer>
+
+    <!-- Admin Badge -->
+    <div id="adminBadge" class="fixed bottom-6 left-6 hidden z-[60] glass bg-slate-900/90 text-white px-6 py-3 rounded-3xl text-xs font-black shadow-2xl border border-white/20">
+        🛡️ ADMIN MODE
+        <button onclick="window.logoutAdmin()" class="ml-4 text-orange-400 hover:text-orange-300 underline">EXIT</button>
+    </div>
+
+    <!-- Pump Form Modal -->
+    <div id="pumpModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md hidden flex items-center justify-center z-[100] p-4">
+        <div class="bg-white rounded-[40px] w-full max-w-lg overflow-hidden shadow-2xl border border-white">
+            <div class="bg-orange-600 p-6 text-white flex justify-between items-center">
+                <h2 id="modalTitle" class="text-xl font-black">পাম্পের তথ্য দিন</h2>
+                <button onclick="closeModal()" class="w-10 h-10 flex items-center justify-center rounded-full bg-black/10 hover:bg-black/20 transition text-2xl">&times;</button>
+            </div>
+            <form id="pumpForm" class="p-8 space-y-6 max-h-[75vh] overflow-y-auto">
+                <input type="hidden" id="editPumpId">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-2">আপনার নাম</label>
+                        <input type="text" id="userName" required class="w-full bg-slate-50 border-0 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-orange-500 outline-none" placeholder="নাম লিখুন">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-2">পাম্পের নাম</label>
+                        <input type="text" id="pumpName" required class="w-full bg-slate-50 border-0 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-orange-500 outline-none" placeholder="পাম্পের নাম">
+                    </div>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-2">পাম্পের অবস্থান</label>
+                    <input type="text" id="pumpLocation" required class="w-full bg-slate-50 border-0 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-orange-500 outline-none" placeholder="যেমন: বাসস্ট্যান্ড, মানিকগঞ্জ">
+                </div>
+                
+                <div class="p-6 bg-orange-50/50 rounded-[35px] space-y-4">
+                    <p class="text-[10px] font-black text-orange-400 uppercase tracking-widest text-center mb-4">তেলের প্রাপ্যতা ও সীমা</p>
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-3 bg-white p-3 rounded-2xl border border-orange-100">
+                            <span class="w-16 text-xs font-black text-orange-600">অকটেন</span>
+                            <select id="octaneStatus" class="flex-1 bg-transparent border-none text-xs font-bold outline-none cursor-pointer">
+                                <option value="available">পাওয়া যাচ্ছে</option>
+                                <option value="limited">সীমিত</option>
+                                <option value="out">শেষ</option>
+                            </select>
+                            <input type="text" id="octaneLimit" class="w-24 bg-slate-50 border-none rounded-xl p-2.5 text-[10px] font-bold" placeholder="যেমন: ২০০০৳">
+                        </div>
+                        <div class="flex items-center gap-3 bg-white p-3 rounded-2xl border border-blue-100">
+                            <span class="w-16 text-xs font-black text-blue-600">পেট্রোল</span>
+                            <select id="petrolStatus" class="flex-1 bg-transparent border-none text-xs font-bold outline-none cursor-pointer">
+                                <option value="available">পাওয়া যাচ্ছে</option>
+                                <option value="limited">সীমিত</option>
+                                <option value="out">শেষ</option>
+                            </select>
+                            <input type="text" id="petrolLimit" class="w-24 bg-slate-50 border-none rounded-xl p-2.5 text-[10px] font-bold" placeholder="যেমন: ১৫০০৳">
+                        </div>
+                        <div class="flex items-center gap-3 bg-white p-3 rounded-2xl border border-green-100">
+                            <span class="w-16 text-xs font-black text-green-600">ডিজেল</span>
+                            <select id="dieselStatus" class="flex-1 bg-transparent border-none text-xs font-bold outline-none cursor-pointer">
+                                <option value="available">পাওয়া যাচ্ছে</option>
+                                <option value="limited">সীমিত</option>
+                                <option value="out">শেষ</option>
+                            </select>
+                            <input type="text" id="dieselLimit" class="w-24 bg-slate-50 border-none rounded-xl p-2.5 text-[10px] font-bold" placeholder="যেমন: ৫০০০৳">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-2">সময়সূচী</label>
+                    <input type="text" id="timing" required class="w-full bg-slate-50 border-0 rounded-2xl p-4 text-sm outline-none" placeholder="যেমন: সকাল ৮টা - রাত ১০টা">
+                </div>
+
+                <button type="submit" class="w-full btn-premium text-white font-black py-4 rounded-2xl shadow-xl shadow-orange-100 active:scale-95 text-lg">তথ্য জমা দিন</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Review Modal -->
+    <div id="reviewModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md hidden flex items-center justify-center z-[110] p-4">
+        <div class="bg-white rounded-[50px] w-full max-w-md shadow-2xl p-10 space-y-8">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">✍️</div>
+                <h2 class="text-2xl font-black text-slate-800">মতামত দিন</h2>
+                <p class="text-slate-400 text-xs font-bold uppercase tracking-tighter">আপনার একটি রিভিউ অন্যকে সাহায্য করবে</p>
+            </div>
+            <form id="reviewForm" class="space-y-4">
+                <input type="hidden" id="reviewPumpId">
+                <input type="text" id="reviewerName" required class="w-full bg-slate-50 rounded-2xl p-4 text-sm outline-none border-2 border-transparent focus:border-slate-800 transition font-medium" placeholder="আপনার নাম">
+                <textarea id="reviewText" required class="w-full bg-slate-50 rounded-2xl p-4 text-sm outline-none border-2 border-transparent focus:border-slate-800 transition font-medium" rows="3" placeholder="পাম্পের অবস্থা নিয়ে কিছু বলুন..."></textarea>
+                <div class="flex gap-4 pt-4">
+                    <button type="button" onclick="closeReviewModal()" class="flex-1 bg-slate-100 text-slate-500 font-black py-4 rounded-2xl hover:bg-slate-200 transition">বাতিল</button>
+                    <button type="submit" class="flex-[2] bg-slate-900 text-white font-black py-4 rounded-2xl shadow-2xl shadow-slate-300 hover:bg-slate-800 transition">জমা দিন</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, arrayUnion, deleteDoc, getDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDD8l8Jsl6trhp6lhNkuXQHT4WH19LBXdo",
+            authDomain: "tel-dicche-manikganj.firebaseapp.com",
+            projectId: "tel-dicche-manikganj",
+            storageBucket: "tel-dicche-manikganj.firebasestorage.app",
+            messagingSenderId: "302306298288",
+            appId: "1:302306298288:web:63a204ffdc504b52ea2e75"
+        };
+
+        const appId = 'tel-dicche-manikganj-v1';
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentUser = null;
+        let isAdmin = localStorage.getItem('tel_dicche_admin') === 'true';
+
+        const loadingEl = document.getElementById('loading');
+        const pumpListEl = document.getElementById('pumpList');
+        const noDataEl = document.getElementById('noData');
+        const adminBadge = document.getElementById('adminBadge');
+
+        const init = async () => {
+            if (isAdmin) adminBadge.classList.remove('hidden');
+            try { await signInAnonymously(auth); } catch (err) { }
+            onAuthStateChanged(auth, (user) => {
+                currentUser = user;
+                if (user) fetchPumps();
+            });
+        };
+
+        const fetchPumps = () => {
+            const q = collection(db, 'artifacts', appId, 'public', 'data', 'pumps');
+            onSnapshot(q, (snapshot) => {
+                loadingEl.classList.add('hidden');
+                const pumps = [];
+                snapshot.forEach(doc => pumps.push({ id: doc.id, ...doc.data() }));
+
+                if (pumps.length === 0) {
+                    noDataEl.classList.remove('hidden');
+                    pumpListEl.classList.add('hidden');
+                } else {
+                    noDataEl.classList.add('hidden');
+                    pumpListEl.classList.remove('hidden');
+                    renderPumps(pumps);
+                }
+            }, (err) => {
+                console.error("Firestore error:", err);
+            });
+        };
+
+        const renderPumps = (pumps) => {
+            pumpListEl.innerHTML = '';
+            pumps.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
+
+            pumps.forEach(pump => {
+                const card = document.createElement('div');
+                card.className = 'glass rounded-[50px] overflow-hidden pump-card p-8 flex flex-col h-full shadow-sm';
+                
+                const sColor = (s) => s === 'available' ? 'text-green-600 bg-green-50/50' : (s === 'limited' ? 'text-yellow-600 bg-yellow-50/50' : 'text-red-500 bg-red-50/50');
+                const sLabel = (s) => s === 'available' ? 'পাওয়া যাচ্ছে' : (s === 'limited' ? 'সীমিত' : 'শেষ');
+
+                const revs = (pump.reviews || []).slice(-2).reverse().map(r => `
+                    <div class="bg-white/50 p-3 rounded-2xl text-[11px] border border-white mb-2 last:mb-0 shadow-sm">
+                        <span class="font-black text-slate-700">${r.userName}:</span> ${r.comment}
+                    </div>
+                `).join('');
+
+                card.innerHTML = `
+                    <div class="flex-grow">
+                        <div class="flex justify-between items-start mb-8">
+                            <div class="max-w-[70%]">
+                                <h3 class="text-2xl font-black text-slate-800 leading-none mb-2">${pump.pumpName}</h3>
+                                <p class="text-xs text-slate-400 font-bold flex items-center">
+                                    <svg class="w-3.5 h-3.5 mr-1 text-slate-300" fill="currentColor" viewBox="0 0 20 20"><path d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"></path></svg>
+                                    ${pump.location}
+                                </p>
+                            </div>
+                            <div class="bg-orange-600 text-[10px] text-white px-3 py-2 rounded-2xl font-black shadow-lg shadow-orange-100 whitespace-nowrap">
+                                ${pump.updatedAt ? new Date(pump.updatedAt.seconds * 1000).toLocaleTimeString('bn-BD', {hour: '2-digit', minute:'2-digit'}) : ''}
+                            </div>
+                        </div>
+
+                        <div class="space-y-3 mb-8">
+                            <div class="flex justify-between items-center p-4 rounded-3xl border border-slate-50 ${sColor(pump.octaneStatus)}">
+                                <span class="text-[10px] font-black uppercase tracking-widest">অকটেন</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-[10px] opacity-60 font-black">${pump.octaneLimit || '-'}</span>
+                                    <span class="text-sm font-black">${sLabel(pump.octaneStatus)}</span>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center p-4 rounded-3xl border border-slate-50 ${sColor(pump.petrolStatus)}">
+                                <span class="text-[10px] font-black uppercase tracking-widest">পেট্রোল</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-[10px] opacity-60 font-black">${pump.petrolLimit || '-'}</span>
+                                    <span class="text-sm font-black">${sLabel(pump.petrolStatus)}</span>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center p-4 rounded-3xl border border-slate-50 ${sColor(pump.dieselStatus)}">
+                                <span class="text-[10px] font-black uppercase tracking-widest">ডিজেল</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-[10px] opacity-60 font-black">${pump.dieselLimit || '-'}</span>
+                                    <span class="text-sm font-black">${sLabel(pump.dieselStatus)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/[0.03] p-5 rounded-[30px] flex items-center gap-4 mb-8">
+                            <div class="bg-white p-2.5 rounded-2xl shadow-sm text-lg">🕒</div>
+                            <div>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">সময়সূচী</p>
+                                <p class="text-slate-700 font-black text-sm">${pump.timing}</p>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="flex justify-between items-center mb-4">
+                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">রিভিউ (${(pump.reviews || []).length})</p>
+                                <button onclick="window.openReviewModal('${pump.id}')" class="text-[10px] font-black text-orange-600 hover:text-orange-700">মতামত দিন</button>
+                            </div>
+                            <div class="space-y-2">
+                                ${revs || '<p class="text-[10px] text-slate-300 italic py-2 font-bold">এখনো কোন রিভিউ নেই</p>'}
+                            </div>
+                        </div>
+                    </div>
+
+                    ${isAdmin ? `
+                    <div class="pt-6 border-t border-slate-100 flex gap-3">
+                        <button onclick="window.editPump('${pump.id}')" class="flex-1 bg-slate-800 text-white text-[11px] py-3.5 rounded-2xl font-black active:scale-95 transition shadow-lg shadow-slate-200">এডিট</button>
+                        <button onclick="window.deletePump('${pump.id}')" class="flex-1 bg-red-50 text-red-600 text-[11px] py-3.5 rounded-2xl font-black active:scale-95 transition">ডিলিট</button>
+                    </div>
+                    ` : ''}
+                `;
+                pumpListEl.appendChild(card);
+            });
+        };
+
+        // Form Logic
+        const pumpModal = document.getElementById('pumpModal');
+        const pumpForm = document.getElementById('pumpForm');
+        
+        window.closeModal = () => {
+            pumpModal.classList.add('hidden');
+            pumpForm.reset();
+            document.getElementById('editPumpId').value = '';
+            document.getElementById('modalTitle').innerText = "পাম্পের তথ্য দিন";
+        };
+
+        document.getElementById('addPumpBtn').onclick = () => pumpModal.classList.remove('hidden');
+
+        pumpForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const editId = document.getElementById('editPumpId').value;
+            const data = {
+                pumpName: document.getElementById('pumpName').value,
+                location: document.getElementById('pumpLocation').value,
+                addedBy: document.getElementById('userName').value,
+                octaneStatus: document.getElementById('octaneStatus').value,
+                octaneLimit: document.getElementById('octaneLimit').value,
+                petrolStatus: document.getElementById('petrolStatus').value,
+                petrolLimit: document.getElementById('petrolLimit').value,
+                dieselStatus: document.getElementById('dieselStatus').value,
+                dieselLimit: document.getElementById('dieselLimit').value,
+                timing: document.getElementById('timing').value,
+                updatedAt: Timestamp.now()
+            };
+            try {
+                if (editId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pumps', editId), data); }
+                else { data.reviews = []; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'pumps'), data); }
+                closeModal();
+            } catch (err) { alert("Error saving data!"); console.error(err); }
+        };
+
+        // Admin Auth
+        document.getElementById('adminLoginBtn').onclick = () => {
+            const pass = prompt("অ্যাডমিন পাসওয়ার্ড দিন (admin123):");
+            if (pass === "admin123") { 
+                localStorage.setItem('tel_dicche_admin', 'true'); 
+                location.reload(); 
+            } else if (pass) {
+                alert("ভুল পাসওয়ার্ড!");
+            }
+        };
+        
+        window.logoutAdmin = () => { 
+            localStorage.removeItem('tel_dicche_admin'); 
+            location.reload(); 
+        };
+
+        // Exposed Admin Functions
+        window.editPump = async (id) => {
+            try {
+                const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pumps', id));
+                if (snap.exists()) {
+                    const d = snap.data();
+                    document.getElementById('editPumpId').value = id;
+                    document.getElementById('modalTitle').innerText = "তথ্য সংশোধন করুন";
+                    document.getElementById('pumpName').value = d.pumpName || '';
+                    document.getElementById('pumpLocation').value = d.location || '';
+                    document.getElementById('userName').value = d.addedBy || '';
+                    document.getElementById('octaneStatus').value = d.octaneStatus || 'available';
+                    document.getElementById('octaneLimit').value = d.octaneLimit || '';
+                    document.getElementById('petrolStatus').value = d.petrolStatus || 'available';
+                    document.getElementById('petrolLimit').value = d.petrolLimit || '';
+                    document.getElementById('dieselStatus').value = d.dieselStatus || 'available';
+                    document.getElementById('dieselLimit').value = d.dieselLimit || '';
+                    document.getElementById('timing').value = d.timing || '';
+                    pumpModal.classList.remove('hidden');
+                }
+            } catch (err) { console.error("Edit fetch error:", err); }
+        };
+
+        window.deletePump = async (id) => { 
+            if (confirm("আপনি কি নিশ্চিতভাবে এই পাম্পের তথ্য ডিলিট করতে চান?")) {
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pumps', id)); 
+                } catch (err) { console.error("Delete error:", err); }
+            }
+        };
+
+        // Reviews
+        const reviewModal = document.getElementById('reviewModal');
+        window.openReviewModal = (id) => { document.getElementById('reviewPumpId').value = id; reviewModal.classList.remove('hidden'); };
+        window.closeReviewModal = () => { reviewModal.classList.add('hidden'); document.getElementById('reviewForm').reset(); };
+
+        document.getElementById('reviewForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('reviewPumpId').value;
+            const reviewData = { 
+                userName: document.getElementById('reviewerName').value, 
+                comment: document.getElementById('reviewText').value, 
+                date: Timestamp.now() 
+            };
+            try {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pumps', id), {
+                    reviews: arrayUnion(reviewData)
+                });
+                closeReviewModal();
+            } catch (err) { console.error("Review error:", err); }
+        };
+
+        init();
+    </script>
+</body>
+</html>
