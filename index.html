@@ -20,10 +20,7 @@
         .pump-card:hover {
             transform: translateY(-4px);
         }
-        .status-available { color: #059669; font-weight: bold; }
-        .status-unavailable { color: #dc2626; font-weight: bold; }
-        
-        /* Custom scrollbar for better UX in mobile forms */
+        /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 6px;
         }
@@ -49,13 +46,11 @@
         <!-- Loading State -->
         <div id="loading" class="text-center py-20">
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
-            <p class="mt-4 text-gray-600">তথ্য লোড হচ্ছে...</p>
+            <p id="loadingText" class="mt-4 text-gray-600">তথ্য লোড হচ্ছে...</p>
         </div>
 
         <!-- Pump List -->
-        <div id="pumpList" class="grid gap-6 hidden">
-            <!-- Dynamic Content Here -->
-        </div>
+        <div id="pumpList" class="grid gap-6 hidden"></div>
 
         <!-- No Data Message -->
         <div id="noData" class="hidden text-center py-20 bg-white rounded-xl shadow-sm border border-dashed border-gray-300">
@@ -153,60 +148,77 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc, arrayUnion, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global environment variables
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'tel-dicche-manikganj';
+        /** * গুরুত্বপূর্ণ নির্দেশিকা:
+         * ভেরসেল বা গিটহাবে হোস্ট করলে 'firebaseConfig' এ আপনার নিজের ফায়ারবেস কনফিগারেশন বসাতে হবে।
+         */
+        let firebaseConfig;
+        try {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                firebaseConfig = JSON.parse(__firebase_config);
+            } else {
+                // এখানে আপনার নিজের Firebase Config বসান (Firebase Console থেকে পাবেন)
+                firebaseConfig = {
+                    apiKey: "YOUR_API_KEY",
+                    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+                    projectId: "YOUR_PROJECT_ID",
+                    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+                    messagingSenderId: "YOUR_SENDER_ID",
+                    appId: "YOUR_APP_ID"
+                };
+            }
+        } catch (e) {
+            console.error("Config Error:", e);
+        }
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'tel-dicche-manikganj-v1';
         
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        let currentUser = null;
-
         // UI Elements
         const pumpListEl = document.getElementById('pumpList');
         const loadingEl = document.getElementById('loading');
+        const loadingText = document.getElementById('loadingText');
         const noDataEl = document.getElementById('noData');
         const pumpModal = document.getElementById('pumpModal');
         const reviewModal = document.getElementById('reviewModal');
 
-        /**
-         * Rule 3: Auth Before Queries
-         * We await auth completion BEFORE setting up listeners or operations.
-         */
-        const init = async () => {
+        // Initial App Setup
+        let app, auth, db, currentUser;
+
+        const startApp = async () => {
+            if (!firebaseConfig || firebaseConfig.apiKey === "YOUR_API_KEY") {
+                loadingText.innerHTML = `<span class="text-red-500 font-bold">Error: Firebase Config Missing!</span><br><small class="text-gray-400">কোডটির firebaseConfig অংশে আপনার নিজস্ব API Key এবং অন্যান্য তথ্য বসান।</small>`;
+                return;
+            }
+
             try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // Rule 3: Auth Before Queries
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
                     await signInAnonymously(auth);
                 }
-            } catch (error) {
-                console.error("Authentication failed:", error);
-                loadingEl.innerHTML = `<p class="text-red-600 font-bold p-10">সার্ভারে সংযোগ করতে সমস্যা হচ্ছে। অনুগ্রহ করে পেজটি রিফ্রেশ করুন।</p>`;
-            }
 
-            onAuthStateChanged(auth, (user) => {
-                currentUser = user;
-                if (user) {
-                    fetchPumps();
-                }
-            });
+                onAuthStateChanged(auth, (user) => {
+                    currentUser = user;
+                    if (user) {
+                        fetchPumps();
+                    }
+                });
+            } catch (error) {
+                console.error("Init error:", error);
+                loadingText.innerText = "সার্ভারের সাথে সংযোগ করা যাচ্ছে না।";
+            }
         };
 
-        // Start initialization
-        init();
-
-        /**
-         * Fetch Data using strict path: Rule 1
-         */
-        function fetchPumps() {
+        const fetchPumps = () => {
             if (!currentUser) return;
             
+            // Rule 1: Strict Paths
             const pumpCollection = collection(db, 'artifacts', appId, 'public', 'data', 'pumps');
             
-            // onSnapshot with both success and error callbacks as required
             onSnapshot(pumpCollection, (snapshot) => {
                 loadingEl.classList.add('hidden');
                 const pumps = [];
@@ -223,21 +235,16 @@
                     renderPumps(pumps);
                 }
             }, (error) => {
-                console.error("Firestore Permission Error:", error);
-                if (error.code === 'permission-denied') {
-                    // Handle specifically for user display
-                }
+                console.error("Firestore Error:", error);
+                loadingEl.classList.add('hidden');
+                alert("তথ্য লোড করতে সমস্যা হয়েছে। দয়া করে ফায়ারবেস পারমিশন চেক করুন।");
             });
-        }
+        };
 
         function renderPumps(pumps) {
             pumpListEl.innerHTML = '';
-            // Sorting in JS memory as per Rule 2 (no complex queries in Firestore)
-            pumps.sort((a, b) => {
-                const timeA = a.updatedAt?.seconds || 0;
-                const timeB = b.updatedAt?.seconds || 0;
-                return timeB - timeA;
-            });
+            // Sort by time (latest first)
+            pumps.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
 
             pumps.forEach(pump => {
                 const card = document.createElement('div');
@@ -256,7 +263,7 @@
                 };
 
                 const reviewsHtml = (pump.reviews || []).slice(-3).reverse().map(rev => `
-                    <div class="bg-gray-50 p-2 rounded text-sm mb-1">
+                    <div class="bg-gray-50 p-2 rounded text-sm mb-1 border-l-2 border-orange-200">
                         <span class="font-bold text-gray-700">${rev.userName}:</span>
                         <span class="text-gray-600">${rev.comment}</span>
                     </div>
@@ -273,51 +280,41 @@
                                 </p>
                             </div>
                             <div class="text-right">
-                                <span class="bg-orange-100 text-orange-800 text-[10px] px-2 py-1 rounded-full font-bold whitespace-nowrap">
-                                    আপডেট: ${new Date(pump.updatedAt?.seconds * 1000).toLocaleTimeString('bn-BD')}
+                                <span class="bg-orange-100 text-orange-800 text-[10px] px-2 py-1 rounded-full font-bold">
+                                    ${new Date(pump.updatedAt?.seconds * 1000).toLocaleTimeString('bn-BD')}
                                 </span>
                             </div>
                         </div>
 
                         <div class="grid grid-cols-3 gap-2 mb-4 bg-gray-50 p-3 rounded-lg border">
-                            <div class="text-center border-r">
-                                <p class="text-[10px] text-gray-400 font-bold uppercase">অকটেন</p>
+                            <div class="text-center border-r border-gray-200">
+                                <p class="text-[10px] text-gray-400 font-bold">অকটেন</p>
                                 <p class="${getStatusClass(pump.octaneStatus)} text-sm">${getStatusText(pump.octaneStatus)}</p>
                                 <p class="text-[10px] text-gray-500">${pump.octaneLimit || '-'}</p>
                             </div>
-                            <div class="text-center border-r">
-                                <p class="text-[10px] text-gray-400 font-bold uppercase">পেট্রোল</p>
+                            <div class="text-center border-r border-gray-200">
+                                <p class="text-[10px] text-gray-400 font-bold">পেট্রোল</p>
                                 <p class="${getStatusClass(pump.petrolStatus)} text-sm">${getStatusText(pump.petrolStatus)}</p>
                                 <p class="text-[10px] text-gray-500">${pump.petrolLimit || '-'}</p>
                             </div>
                             <div class="text-center">
-                                <p class="text-[10px] text-gray-400 font-bold uppercase">ডিজেল</p>
+                                <p class="text-[10px] text-gray-400 font-bold">ডিজেল</p>
                                 <p class="${getStatusClass(pump.dieselStatus)} text-sm">${getStatusText(pump.dieselStatus)}</p>
                                 <p class="text-[10px] text-gray-500">${pump.dieselLimit || '-'}</p>
                             </div>
                         </div>
 
-                        <div class="flex items-center text-sm text-gray-700 mb-4">
-                            <svg class="w-4 h-4 mr-2 text-orange-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            সময়সূচী: <span class="font-bold ml-1">${pump.timing}</span>
+                        <div class="text-sm text-gray-700 mb-4 bg-orange-50 p-2 rounded">
+                            <span class="font-bold">⏰ সময়সূচী:</span> ${pump.timing}
                         </div>
 
                         <div class="border-t pt-4">
                             <div class="flex justify-between items-center mb-2">
-                                <h4 class="text-sm font-bold text-gray-600">সাম্প্রতিক রিভিউ (${(pump.reviews || []).length}):</h4>
-                                <button onclick="window.openReviewModal('${pump.id}')" class="text-xs text-orange-600 font-bold border border-orange-200 px-2 py-1 rounded hover:bg-orange-50 transition">মতামত দিন</button>
+                                <h4 class="text-sm font-bold text-gray-600">রিভিউ (${(pump.reviews || []).length}):</h4>
+                                <button onclick="window.openReviewModal('${pump.id}')" class="text-xs text-orange-600 font-bold hover:underline">রিভিউ দিন</button>
                             </div>
                             <div class="space-y-1">
-                                ${reviewsHtml || '<p class="text-xs text-gray-400 italic">এখনো কোন রিভিউ নেই</p>'}
-                            </div>
-                        </div>
-                        
-                        <div class="mt-4 pt-4 border-t flex justify-between items-center">
-                            <div class="text-[10px] text-gray-400 italic">
-                                তথ্য দিয়েছেন: ${pump.addedBy}
-                            </div>
-                            <div class="text-[8px] text-gray-300">
-                                UID: ${pump.addedByUid || 'Public'}
+                                ${reviewsHtml || '<p class="text-xs text-gray-400 italic">কোন রিভিউ নেই</p>'}
                             </div>
                         </div>
                     </div>
@@ -326,16 +323,18 @@
             });
         }
 
-        // Form Handlers
-        document.getElementById('pumpForm').addEventListener('submit', async (e) => {
+        // Form logic
+        document.getElementById('pumpForm').onsubmit = async (e) => {
             e.preventDefault();
             if (!currentUser) return;
+            const btn = e.submitter;
+            btn.disabled = true;
+            btn.innerText = "জমা হচ্ছে...";
 
             const newPump = {
                 pumpName: document.getElementById('pumpName').value,
                 location: document.getElementById('pumpLocation').value,
                 addedBy: document.getElementById('userName').value,
-                addedByUid: currentUser.uid,
                 octaneStatus: document.getElementById('octaneStatus').value,
                 octaneLimit: document.getElementById('octaneLimit').value,
                 petrolStatus: document.getElementById('petrolStatus').value,
@@ -352,19 +351,21 @@
                 e.target.reset();
                 closeModal();
             } catch (err) {
-                console.error("Add Doc Error:", err);
-                alert("তথ্য সেভ করতে সমস্যা হয়েছে। আপনার ইন্টারনেট কানেকশন চেক করুন।");
+                console.error(err);
+                alert("ভুল হয়েছে! ফায়ারবেস রুলস চেক করুন।");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "তথ্য জমা দিন";
             }
-        });
+        };
 
-        document.getElementById('reviewForm').addEventListener('submit', async (e) => {
+        document.getElementById('reviewForm').onsubmit = async (e) => {
             e.preventDefault();
             if (!currentUser) return;
 
             const pumpId = document.getElementById('reviewPumpId').value;
             const review = {
                 userName: document.getElementById('reviewerName').value,
-                reviewerUid: currentUser.uid,
                 comment: document.getElementById('reviewText').value,
                 date: Timestamp.now()
             };
@@ -378,39 +379,21 @@
                 e.target.reset();
                 closeReviewModal();
             } catch (err) {
-                console.error("Update Doc Error:", err);
-                alert("রিভিউ যোগ করা সম্ভব হয়নি।");
+                alert("রিভিউ যোগ করা যায়নি।");
             }
-        });
+        };
 
-        // Global functions for modal control (attached to window for HTML onclick attributes)
+        // Window Globals
         window.openReviewModal = (id) => {
             document.getElementById('reviewPumpId').value = id;
             reviewModal.classList.remove('hidden');
-            document.body.style.overflow = 'hidden'; // Prevent background scroll
         };
+        window.closeReviewModal = () => reviewModal.classList.add('hidden');
+        document.getElementById('addPumpBtn').onclick = () => pumpModal.classList.remove('hidden');
+        window.closeModal = () => pumpModal.classList.add('hidden');
 
-        window.closeReviewModal = () => {
-            reviewModal.classList.add('hidden');
-            document.body.style.overflow = 'auto';
-        };
-
-        document.getElementById('addPumpBtn').onclick = () => {
-            pumpModal.classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
-        };
-        
-        window.closeModal = () => {
-            pumpModal.classList.add('hidden');
-            document.body.style.overflow = 'auto';
-        };
-
-        // Close modals on clicking outside
-        window.addEventListener('click', (e) => {
-            if (e.target === pumpModal) closeModal();
-            if (e.target === reviewModal) closeReviewModal();
-        });
-
+        // Start
+        startApp();
     </script>
 </body>
 </html>
